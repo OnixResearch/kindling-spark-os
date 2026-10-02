@@ -139,7 +139,7 @@ while :; do
 		if [ "$key" = $'\e' ] || [ -z "$key" ]; then
 			printf '\033[?25h'
 			clear
-			exec /bin/login
+			exec "${SPARK_LOGIN:-/bin/login}"
 		fi
 	elif ((SECONDS >= redraw_at)); then
 		draw

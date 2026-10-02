@@ -310,7 +310,7 @@ def t_memory_accounting(**_):
     """
     helper = os.environ.get("SPARK_MEMORY_PY", "/usr/local/bin/spark-memory.py")
     if os.path.exists(helper):
-        return stamped(cap(run(["python3", helper, "-v"], timeout=30)), helper)
+        return stamped(cap(run([helper, "-v"], timeout=30)), helper)
     return stamped(f"({helper} not present)", "memory accounting")
 
 

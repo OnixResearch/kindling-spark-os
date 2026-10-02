@@ -2,6 +2,9 @@
 
 *Kindling Spark OS is in beta. Visit the discord for support https://discord.gg/M7XTrRJW3*
 
+For an **already installed NixOS** GB10 host, use the [NixOS module](#nixos-host-services)
+instead of the Ubuntu image installer below.
+
 A minimal, read-only OS image for NVIDIA GB10 boxes (DGX Spark, ASUS Ascent GX10), installed beside
 the box's DGX OS and booted from GRUB.
 
@@ -36,6 +39,101 @@ The image carries:
 - the [spark agent](agent/): a status page and MCP tools, registered with mentat
 - `dispramd`, which lends the GPU's 2 GiB display carveout to CUDA (see [dispram](#dispram))
 - `spark-watchdog`, a host log snapshot for the agent, and a cluster status console on tty1
+
+## NixOS host services
+
+The fork's `nixosModules.default` ports the Kindling host services to a native NixOS
+configuration. It runs `mentatd`, the spark agent, host diagnostic snapshots, and the
+NetworkManager health check. ConnectX MTU management, the tty1 console, the hardware watchdog,
+and dispram are optional. The module does **not** run `setup.sh`, install a kernel, edit DGX OS
+GRUB, copy DGX OS users, or bind its disk into the root filesystem. NixOS manages its own
+persistent state, boot entries, and rollback. This is **not** the Ubuntu read-only erofs image or
+its ten-minute trial/revert mechanism; do not replace a remote host's boot entry without a
+separate recovery plan.
+
+First install a bootable NixOS system using the [DGX Spark NixOS hardware module](
+https://github.com/graham33/nixos-dgx-spark). Its documentation requires a firmware update
+before NixOS will boot and Secure Boot disabled for the USB installer. Keep your host-specific
+`hardware-configuration.nix`, boot-loader settings, users, and existing `system.stateVersion`.
+For an existing NixOS host flake, add this fork as an input alongside the hardware module:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    dgx-spark.url = "github:graham33/nixos-dgx-spark";
+    kindling.url = "path:/absolute/path/to/kindling-spark-os"; # this checkout
+  };
+
+  outputs = { nixpkgs, dgx-spark, kindling, ... }: {
+    nixosConfigurations.spark = nixpkgs.lib.nixosSystem {
+      system = "aarch64-linux";
+      modules = [
+        dgx-spark.nixosModules.dgx-spark
+        kindling.nixosModules.default
+        ./configuration.nix # your existing host configuration and hardware-configuration.nix
+        {
+          hardware.dgx-spark.enable = true;
+          services.kindling.enable = true;
+          # services.kindling.connectxMtu = 4096; # only if your switches support MTU 4200
+          # services.kindling.console.enable = true; # takes over tty1
+        }
+      ];
+    };
+  };
+}
+```
+
+Place the cluster key outside the Nix store, in `/etc/spark/mentat.key` (mode 0400), and set
+`MENTAT_SECRET_FILE=/etc/spark/mentat.key` in `/etc/spark/node.env`. Use the same key on every
+cluster node. Optional `/etc/spark/agent.env` accepts `MENTAT_ROUTER_URL` and
+`ALLOWED_SOURCES`. The host firewall stays closed by default; expose TCP 6379, 6380, 8090 and
+UDP 6382 only on a trusted cluster network (`services.kindling.openFirewall = true` opens them
+on **all** interfaces). The agent serves host information to allowed source subnets, so do not
+expose :8090 to the public Internet. The snapshot uses the host's Docker-compatible CLI;
+choose either rootful Podman with Docker compatibility or Docker, not competing daemons.
+
+Check the generation before scheduling a reboot with
+`sudo nixos-rebuild build --flake .#spark`. On a NixOS host, use
+`sudo nixos-rebuild boot --flake .#spark` after review. NixOS rollback uses its normal boot
+menu/previous generation, **not** `sparkos-promote` or `sparkos-rollback`. After boot, verify
+`systemctl status mentatd spark-agent spark-dmesg-snapshot.timer`,
+`curl http://127.0.0.1:6380/status`, `curl http://127.0.0.1:8090/`, `nvidia-smi`, and the
+running model containers. A missing `/etc/spark/node.env` deliberately prevents `mentatd`
+from starting. The hardware watchdog is off unless
+`services.kindling.watchdog.enable = true`; it can reset a host if process creation fails.
+Enabling it disables systemd's runtime watchdog so only one process owns `/dev/watchdog`.
+
+The 64 KiB kernel is opt-in via `hardware.dgx-spark.use64kKernel = true` in the hardware
+module; this module then disables transparent huge pages, as the Ubuntu image does. Check
+page-size compatibility of swap and CUDA workloads before using it. See the [upstream kernel
+warning](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1269) for GPU faults with
+some newer drivers and large allocations on 64 KiB pages.
+
+Dispram is **disabled**: the NixOS hardware module may choose a different driver from the
+Ubuntu stack validated in `stacks.yaml`. Only after validating the exact NixOS driver and
+carveout on your box, pin the matching NVIDIA `open-gpu-kernel-modules` source tree in your
+flake lock, then add a flake input and pass it to your configuration. For the
+repository's validated Ubuntu driver **only**, this means adding
+`ogkm = { url = "github:NVIDIA/open-gpu-kernel-modules/c8e699821c23e4335bf23330a54a23d15cfb95e9"; flake = false; };`
+to `inputs`, adding `ogkm` to `outputs`' argument set, and setting:
+
+```nix
+services.kindling.dispram = {
+  enable = true;
+  validatedDriver = "580.178.04";
+  ogkmVersion = "580.178.04";
+  ogkmSource = ogkm.outPath;
+};
+```
+
+Replace **both** declared versions and the pinned source when validating a different driver.
+The daemon checks
+`/proc/driver/nvidia/version` at runtime and exits without lending on a mismatch. The
+derivation in `nix/pkgs/dispram.nix` installs the client plugin under
+`share/dispram/python` for mounting into model containers. Dispram has **not** been
+validated with the NixOS driver or on a NixOS GB10 host. Do not enable it just to chase
+the Ubuntu image's 2 GiB claim.
 
 ## Quick start
 

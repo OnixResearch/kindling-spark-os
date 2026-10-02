@@ -39,6 +39,19 @@ lends the GB10's unused 2 GiB display carveout to CUDA.
 | `agent/` | The spark host agent (status page and MCP tools on :8090) and `spark-memory.py`. Has its own README. |
 | `dispram/` | The carveout lender (AGPL server, GPL+exception client and vLLM plugin). Has its own README and licences. |
 | `docs/` | README assets. |
+| `flake.nix`, `nix/` | NixOS host-service module, pinned mentat/agent packages, opt-in dispram. It targets a separately bootable NixOS GB10 host, not the Ubuntu image's GRUB or initramfs. |
+
+## NixOS port
+
+`nixosModules.default` provides host services on an existing NixOS installation. The
+[DGX Spark hardware module](https://github.com/graham33/nixos-dgx-spark) owns kernel,
+NVIDIA drivers and boot configuration. NixOS owns local user accounts, persistence, and
+rollback; do not copy the Ubuntu image's GRUB edits, DGX OS password import, or
+auto-revert timer into the NixOS module. `services.kindling.dispram` remains disabled until
+the actual NixOS driver, matching pinned OGKM headers, and carveout have been validated
+on the box. Keep mentat's source commit and SHA-256 pinned to the release in the
+Ubuntu Dockerfile. `nix flake show`, NixOS module evaluation, and builds of the
+packaged programs exercise the host side without rebooting a box.
 
 ## How an install works, end to end
 
