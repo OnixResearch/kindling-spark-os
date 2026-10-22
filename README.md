@@ -87,11 +87,33 @@ For an existing NixOS host flake, add this fork as an input alongside the hardwa
 Place the cluster key outside the Nix store, in `/etc/spark/mentat.key` (mode 0400), and set
 `MENTAT_SECRET_FILE=/etc/spark/mentat.key` in `/etc/spark/node.env`. Use the same key on every
 cluster node. Optional `/etc/spark/agent.env` accepts `MENTAT_ROUTER_URL` and
-`ALLOWED_SOURCES`. The host firewall stays closed by default; expose TCP 6379, 6380, 8090 and
-UDP 6382 only on a trusted cluster network (`services.kindling.openFirewall = true` opens them
-on **all** interfaces). The agent serves host information to allowed source subnets, so do not
-expose :8090 to the public Internet. The snapshot uses the host's Docker-compatible CLI;
-choose either rootful Podman with Docker compatibility or Docker, not competing daemons.
+`ALLOWED_SOURCES`. The snapshot uses the host's Docker-compatible CLI; choose either rootful
+Podman with Docker compatibility or Docker, not competing daemons.
+
+The Ubuntu image runs no firewall. NixOS's firewall is on, and closed to the cluster by
+default. `services.kindling.openFirewall = true` opens what mentatd and the agent listen on,
+TCP 6379, 6380 and 8090 and UDP 6382, on **all** interfaces. A cluster needs more than that:
+
+- The router must reach each model's announced endpoints, `MENTAT_OPENAI_API` and
+  `MENTAT_MCP_API` (8000 and 9000 in mentat's examples). The recipe picks those ports.
+- A model group that spans boxes runs NCCL's bootstrap, torch.distributed's rendezvous and
+  vLLM's MessageQueue between them, on TCP ports picked at start. They use the boxes' fabric
+  addresses when mentat placed the group on a fabric, and their LAN addresses otherwise.
+
+So trust the links that carry that traffic and reach nothing but the cluster, such as the
+ConnectX ports, and open the endpoint ports. `ip -br link` lists the ports. One cabled QSFP
+port shows as two interfaces, and NCCL uses both:
+
+```nix
+networking.firewall.trustedInterfaces = [ "enp1s0f0np0" "enP2p1s0f0np0" ];
+networking.firewall.allowedTCPPorts = [ 8000 9000 ]; # your recipes' endpoint ports
+services.kindling.openFirewall = true;
+```
+
+A trusted interface accepts every port, so never trust one that reaches past the cluster. A
+group that spans boxes over the LAN needs the LAN trusted too, which is only safe on a LAN that
+holds nothing but the cluster. The agent serves host information to allowed source subnets, so
+do not expose :8090 to the public Internet.
 
 Check the generation before scheduling a reboot with
 `sudo nixos-rebuild build --flake .#spark`. On a NixOS host, use

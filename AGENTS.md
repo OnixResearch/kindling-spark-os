@@ -71,6 +71,10 @@ containers, and `/run/dispram` exists even when dispramd does not run. Recipes b
 and Podman, which the hardware module enables, refuses to start a container whose bind source
 is missing.
 
+NixOS's firewall is on, and `openFirewall` covers only mentatd and the agent. Model endpoints,
+and groups that span boxes (NCCL's bootstrap, torch.distributed and vLLM's MessageQueue, on
+ports picked at start), need the cluster's interfaces trusted. The README shows how.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`
