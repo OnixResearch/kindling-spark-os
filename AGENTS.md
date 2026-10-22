@@ -52,8 +52,11 @@ the actual NixOS driver, matching pinned OGKM headers, and carveout have been va
 on the box. Keep mentat's source commit and SHA-256 pinned to the release in the
 Ubuntu Dockerfile, and py-spy to its wheel: `nix/packages.nix` fetches the same aarch64 wheel
 as `PY_SPY_SHA256`, plus the x86_64 one for the VM test. A Dockerfile bump of either needs
-the same bump there. `nix flake show`, NixOS module evaluation, and builds of the
-packaged programs exercise the host side without rebooting a box.
+the same bump there. A mentat bump also copies the commit's `rust/Cargo.lock` to
+`nix/pkgs/mentat-Cargo.lock`. The flake exports the programs as `packages` (`nix build
+.#packages.aarch64-linux.mentatd`, `sparkAgent`, `sparkMemory`, `pySpy`).
+`checks.aarch64-linux.dispram` builds dispram against the OGKM commit of `stacks.yaml`'s
+default stack. When that stack changes, change the check's commit, hash and release with it.
 `nix build -L .#checks.x86_64-linux.vm` (`nix/tests/vm.nix`) runs the module in two VMs, a
 cluster of two without GPUs. Run it after changing the module or an overlay script it uses.
 
