@@ -62,6 +62,10 @@ has no `-p`, so procps comes before coreutils on the status screen's path. Evalu
 catch a missing command: run each script with its unit's evaluated `environment.PATH`. When
 upstream adds a command to an overlay script, add its package to the unit.
 
+Units refer to overlay files one at a time (`${../../overlay/usr/local/bin/spark-console}`),
+never to the checkout. A copy of the checkout carries `.git`, and every edit or fetch would
+restart the units on the next switch.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`
