@@ -190,7 +190,7 @@ services.kindling.dispram = {
 ```
 
 Replace **both** declared versions and the pinned source when validating a different driver.
-The daemon checks
+The build fails unless the source's `version.mk` names `ogkmVersion`, and the daemon checks
 `/proc/driver/nvidia/version` at runtime and exits without lending on a mismatch. With
 `services.kindling.enable`, the module links the client plugin at
 `/opt/kindling/dispram/python` and creates `/run/dispram`, the paths recipes mount (see
