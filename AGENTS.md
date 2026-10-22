@@ -67,6 +67,11 @@ the VM test on both: as is, and with
 That nixpkgs' test driver takes timeouts in seconds and today's takes a timedelta, so the test
 leaves timeouts at their default.
 
+mentatd and spark-console set `restartIfChanged = false`, so a switch never restarts them: it
+would kill a model group this box heads, or hang up a tty1 login. Keep it that way for any unit
+whose restart costs that much. The VM test's last subtest switches to a generation with changed
+units and checks both keep their process.
+
 A NixOS unit's PATH holds only what its `path` lists, plus coreutils, findutils, grep, sed and
 systemd. The overlay scripts run unchanged, so every command they call needs its package on
 their unit's `path`: `hostname` for mentatd and the status screen, `getent` for the status

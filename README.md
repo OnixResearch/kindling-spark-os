@@ -161,6 +161,11 @@ from starting. The hardware watchdog is off unless
 `services.kindling.watchdog.enable = true`; it can reset a host if process creation fails.
 Enabling it disables systemd's runtime watchdog so only one process owns `/dev/watchdog`.
 
+`nixos-rebuild switch` leaves `mentatd` and the tty1 status screen running as they were.
+Restarting `mentatd` on the box that heads a model group kills that group, and restarting the
+status screen hangs up whoever logged in on tty1. A new `mentatd` therefore takes over at the
+next boot, or at a `systemctl restart mentatd` you run when no model group would mind.
+
 The 64 KiB kernel is opt-in via `hardware.dgx-spark.use64kKernel = true` in the hardware
 module; this module then disables transparent huge pages, as the Ubuntu image does. Check
 page-size compatibility of swap and CUDA workloads before using it. See the [upstream kernel
