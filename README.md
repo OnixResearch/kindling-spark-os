@@ -113,6 +113,12 @@ can lead it back to itself: in the VM test, the router ran spark2's agent tools 
 the cluster's interfaces in `node.env` instead, as the VM test does with
 `MENTAT_ANNOUNCE_IFACES=eno1,enp1s0f0np0`.
 
+`services.kindling.connectxMtu` and `ethernetMtu` give each `en*` port its MTU when the port
+appears, at boot or later, as a ConnectX port does when its cable goes in. On NetworkManager
+hosts, the dispatcher sets it again whenever a profile comes up, and also kicks mentatd's health
+check after a network change. Without NetworkManager, mentatd's own restart backoff, 2 to 60
+seconds, stands in for that check.
+
 The Ubuntu image runs no firewall. NixOS's firewall is on, and closed to the cluster by
 default. `services.kindling.openFirewall = true` opens what mentatd and the agent listen on,
 TCP 6379, 6380 and 8090 and UDP 6382, on **all** interfaces. A cluster needs more than that:

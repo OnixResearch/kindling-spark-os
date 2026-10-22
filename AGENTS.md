@@ -107,6 +107,13 @@ QEMU's user network gave both VMs 10.0.2.15, and the router then ran spark2's ag
 spark1. Podman's `podman0` (10.88.0.1 on every Podman host) is the same trap, so the test, and
 the README, name the cluster's interfaces in `MENTAT_ANNOUNCE_IFACES`.
 
+Port MTUs follow the ports, not the boot: a udev rule starts `sparkos-mtu@<port>.service` for
+every `en*` port that appears, so networkd hosts and ConnectX ports that come up late get it
+too. The rule matches `move` as well as `add`: systemd ignores the add event of a port that udev
+renames, and a ConnectX port starts as `eth<N>`, so only the move that follows starts the unit.
+NetworkManager's dispatcher still re-runs the script on `up` and `reapply`. The VM test re-binds
+a NIC's driver on spark2, and udev renames the port that comes back.
+
 Firmware updates on a NixOS host go through fwupd and LVFS (README, "Firmware updates on a
 NixOS host"). Never run `fwupdmgr update` or `install` on a box: it writes firmware (see Boot
 safety). To recheck the NixOS side in a VM, give fwupd a fake firmware tree with
