@@ -99,6 +99,16 @@ QEMU's user network gave both VMs 10.0.2.15, and the router then ran spark2's ag
 spark1. Podman's `podman0` (10.88.0.1 on every Podman host) is the same trap, so the test, and
 the README, name the cluster's interfaces in `MENTAT_ANNOUNCE_IFACES`.
 
+Firmware updates on a NixOS host go through fwupd and LVFS (README, "Firmware updates on a
+NixOS host"). Never run `fwupdmgr update` or `install` on a box: it writes firmware (see Boot
+safety). To recheck the NixOS side in a VM, give fwupd a fake firmware tree with
+`FWUPD_SYSFSFWDIR`: ESRT entries with the Spark's GUIDs (SoC `b488217b-…`, EC `3d13c989-…`,
+USB-C PD `dd1a238a-…`), and an `efi/efivars` tmpfs mount whose `OsIndicationsSupported` has bit
+0x4. LVFS requires the hardware ID of `NVIDIA&DGX Spark` (manufacturer and family, or
+manufacturer and SKU), so give QEMU `-smbios type=0,vendor=NVIDIA,uefi=on` and
+`type=1,manufacturer=NVIDIA,product=NVIDIA_DGX_Spark,family=DGX Spark,sku=DGX Spark`. Install
+the cabinets from `fwupd.org/downloads` by their SHA-256.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`

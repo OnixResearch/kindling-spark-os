@@ -194,6 +194,54 @@ Without dispramd the plugin stands aside. Dispram has **not** been
 validated with the NixOS driver or on a NixOS GB10 host. Do not enable it just to chase
 the Ubuntu image's 2 GiB claim.
 
+### Firmware updates on a NixOS host
+
+NVIDIA publishes the Spark's firmware to [LVFS](https://fwupd.org/) as UEFI capsules: the SoC
+firmware (UEFI and GPU initialisation), the embedded controller, the USB-C power delivery
+controller and the TPM. fwupd stages each capsule in `EFI/UpdateCapsule` on the EFI system
+partition and sets the capsule bit in the `OsIndications` EFI variable, and the firmware applies
+it on the next boot. ConnectX-7 and NVMe firmware are not offered on LVFS.
+
+A Spark on its factory firmware boots only DGX OS, so take the first update there
+(`sudo fwupdmgr refresh && sudo fwupdmgr update`). After that, NixOS can update itself.
+graham33's hardware module enables fwupd. With straylight-software's, add
+`services.fwupd.enable = true;`.
+
+Check three things first. The last two make an update fail without any warning:
+
+- `df -h /boot` shows about 60 MB free. fwupd wants twice the capsule plus 1 MB, and the SoC
+  capsule is 30 MB. systemd-boot keeps every generation's kernel on that partition. If it is
+  short, lower `boot.loader.systemd-boot.configurationLimit` and collect garbage. Without the
+  room, fwupd refuses before it writes anything.
+- `findmnt -no OPTIONS /sys/firmware/efi/efivars` starts with `rw`, as it does on NixOS by
+  default. With it read-only, fwupd stages the capsules, reports success, and leaves
+  `OsIndications` unset, so the firmware never looks at them.
+- NixOS's entry comes first in `BootOrder` (`efibootmgr` lists it), or DGX OS and NixOS share
+  one EFI system partition. UEFI firmware built on EDK2 looks for capsules only on the partition
+  of the first active boot entry (`BootNext`, then `BootOrder`). Whether the Spark's firmware
+  does the same has not been checked.
+
+Then:
+
+    sudo fwupdmgr refresh --force
+    fwupdmgr get-updates
+    sudo fwupdmgr update --no-reboot-check
+    ls /boot/EFI/UpdateCapsule
+    echo $(( 0x$(od -An -tx8 -j4 /sys/firmware/efi/efivars/OsIndications-8be4df61-93ca-11d2-aa0d-00e098032b8c | tr -d ' ') & 4 ))
+    sudo systemctl reboot
+
+`ls` lists one `fwupd-<guid>.cap` per update, and the `echo` prints `4`. Reboot through the
+firmware: `systemctl kexec` skips it. A box applying SoC and EC capsules stays dark for about
+ten minutes, so do not cut its power. Afterwards, `fwupdmgr get-devices` shows the new versions.
+An embedded controller that still shows its old version can need a power cycle: shut down,
+unplug, wait, and reconnect. If the screen asks for a UEFI administrator password during the
+capsule update, stop: NVIDIA says that password cannot be reset and handles it through support.
+
+In a VM that presented a Spark's ESRT entries, SMBIOS strings and capsule-on-disk support,
+NixOS's fwupd (2.1.8, and 2.0.16 on straylight-software's nixpkgs) accepted NVIDIA's current
+LVFS cabinets, staged each capsule byte for byte and set `OsIndications`. No firmware has been
+flashed from NixOS on a box.
+
 ## Quick start
 
 On the box, from DGX OS:
