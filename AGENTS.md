@@ -53,6 +53,15 @@ on the box. Keep mentat's source commit and SHA-256 pinned to the release in the
 Ubuntu Dockerfile. `nix flake show`, NixOS module evaluation, and builds of the
 packaged programs exercise the host side without rebooting a box.
 
+A NixOS unit's PATH holds only what its `path` lists, plus coreutils, findutils, grep, sed and
+systemd. The overlay scripts run unchanged, so every command they call needs its package on
+their unit's `path`: `hostname` for mentatd and the status screen, `getent` for the status
+screen, and `dmesg` (util-linux) for the snapshot. `nvidia-smi` is in the driver's `bin` output
+(`hardware.nvidia.package.bin`), which `/run/opengl-driver` leaves out. GNU coreutils' `uptime`
+has no `-p`, so procps comes before coreutils on the status screen's path. Evaluation does not
+catch a missing command: run each script with its unit's evaluated `environment.PATH`. When
+upstream adds a command to an overlay script, add its package to the unit.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`
