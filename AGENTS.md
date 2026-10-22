@@ -57,6 +57,16 @@ packaged programs exercise the host side without rebooting a box.
 `nix build -L .#checks.x86_64-linux.vm` (`nix/tests/vm.nix`) runs the module in two VMs, a
 cluster of two without GPUs. Run it after changing the module or an overlay script it uses.
 
+Two hardware modules work with this one. graham33/nixos-dgx-spark has NVIDIA's 7.0 kernel, the
+615 driver and `/run/docker.sock`. straylight-software/nixos-dgx-spark's `main` is graham33's
+module as of 2025-12-14: the 6.17 kernel, 580.95.05, and no `/run/docker.sock`. It needs a
+nixpkgs that still has `linux_6_17`, such as `45d3c39`, where nixpkgs' py-spy is marked broken
+on aarch64. So take nothing from the host's nixpkgs that is missing or broken there, and run
+the VM test on both: as is, and with
+`--override-input nixpkgs github:NixOS/nixpkgs/45d3c39fc013ef15db3cf308a21fbd4b2d69a73d`.
+That nixpkgs' test driver takes timeouts in seconds and today's takes a timedelta, so the test
+leaves timeouts at their default.
+
 A NixOS unit's PATH holds only what its `path` lists, plus coreutils, findutils, grep, sed and
 systemd. The overlay scripts run unchanged, so every command they call needs its package on
 their unit's `path`: `hostname` for mentatd and the status screen, `getent` for the status

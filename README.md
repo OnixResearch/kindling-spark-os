@@ -85,6 +85,13 @@ For an existing NixOS host flake, add this fork as an input alongside the hardwa
 }
 ```
 
+[straylight-software/nixos-dgx-spark](https://github.com/straylight-software/nixos-dgx-spark)
+works in place of that hardware module, with the same `nixosModules.dgx-spark`. Its `main` is
+graham33's module as it was on 2025-12-14: NVIDIA's 6.17 kernel, the 580.95.05 driver, and no
+64 KiB kernel option. It builds the kernel from `pkgs.linux_6_17`, which nixpkgs has since
+removed, so the host needs a nixpkgs from before then, such as the revision in its lock:
+`nixpkgs.url = "github:NixOS/nixpkgs/45d3c39fc013ef15db3cf308a21fbd4b2d69a73d";`.
+
 Place the cluster key outside the Nix store, in `/etc/spark/mentat.key` (mode 0400), and set
 `MENTAT_SECRET_FILE=/etc/spark/mentat.key` in `/etc/spark/node.env`. Use the same key on every
 cluster node. Optional `/etc/spark/agent.env` accepts `MENTAT_ROUTER_URL` and
@@ -137,7 +144,9 @@ firewall above. It checks that the daemons name themselves and mesh, that a rout
 runs the other's agent tools, that the fabric passes what the LAN blocks, and that the MTU
 unit, the snapshot, the status screen, the dispram mounts under Podman and the watchdog work.
 The VMs have no GPU, no GB10 kernel and no RDMA, so `nvidia-smi`, dispramd and the ConnectX
-MTU path still need a box.
+MTU path still need a box. For a host on the straylight-software module, add
+`--override-input nixpkgs github:NixOS/nixpkgs/45d3c39fc013ef15db3cf308a21fbd4b2d69a73d` to run
+the same test on its nixpkgs.
 `nix run .#checks.x86_64-linux.vm.driverInteractive` starts the same VMs from a Python prompt:
 `start_all()` boots them, and `spark1.shell_interact()` gives a root shell.
 
