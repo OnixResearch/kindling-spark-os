@@ -91,6 +91,20 @@ cluster node. Optional `/etc/spark/agent.env` accepts `MENTAT_ROUTER_URL` and
 `ALLOWED_SOURCES`. The snapshot uses the host's Docker-compatible CLI; choose either rootful
 Podman with Docker compatibility or Docker, not competing daemons.
 
+mentatd finds its peers by broadcast, and it announces only on interfaces that have a
+broadcast address. NixOS's scripted networking adds static addresses
+(`networking.interfaces.<name>.ipv4.addresses`) without one, so a box set up that way
+announces nothing and never meshes. systemd-networkd (`networking.useNetworkd = true`) adds
+them with one, and `ip -4 addr` shows it as `brd`. Without one, list the other boxes in
+`node.env`, as `MENTAT_PEERS=192.168.1.12:6379,192.168.1.13:6379`.
+
+mentatd announces every IPv4 interface that is up, except `docker*`, `veth*`, `br-*` and
+`virbr*`. An address that every box has, such as Podman's `podman0` (10.88.0.1 by default) or
+a VM's QEMU user network (10.0.2.15), then looks to the router like a way to reach any box, and
+can lead it back to itself: in the VM test, the router ran spark2's agent tools on spark1. Name
+the cluster's interfaces in `node.env` instead, as the VM test does with
+`MENTAT_ANNOUNCE_IFACES=eno1,enp1s0f0np0`.
+
 The Ubuntu image runs no firewall. NixOS's firewall is on, and closed to the cluster by
 default. `services.kindling.openFirewall = true` opens what mentatd and the agent listen on,
 TCP 6379, 6380 and 8090 and UDP 6382, on **all** interfaces. A cluster needs more than that:

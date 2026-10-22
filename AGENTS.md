@@ -78,6 +78,15 @@ NixOS's firewall is on, and `openFirewall` covers only mentatd and the agent. Mo
 and groups that span boxes (NCCL's bootstrap, torch.distributed and vLLM's MessageQueue, on
 ports picked at start), need the cluster's interfaces trusted. The README shows how.
 
+mentatd announces only on interfaces with a broadcast address, and NixOS's scripted networking
+adds static addresses without one. The first run of the VM test never meshed for that reason,
+so the test uses networkd, and the README tells hosts to use it or `MENTAT_PEERS`.
+
+mentatd also announces every up IPv4 interface except `docker*`, `veth*`, `br-*` and `virbr*`.
+QEMU's user network gave both VMs 10.0.2.15, and the router then ran spark2's agent tools on
+spark1. Podman's `podman0` (10.88.0.1 on every Podman host) is the same trap, so the test, and
+the README, name the cluster's interfaces in `MENTAT_ANNOUNCE_IFACES`.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`
