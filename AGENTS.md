@@ -66,6 +66,11 @@ Units refer to overlay files one at a time (`${../../overlay/usr/local/bin/spark
 never to the checkout. A copy of the checkout carries `.git`, and every edit or fetch would
 restart the units on the next switch.
 
+With Kindling enabled, `/opt/kindling/dispram` links to the parts of dispram that run in model
+containers, and `/run/dispram` exists even when dispramd does not run. Recipes bind-mount both,
+and Podman, which the hardware module enables, refuses to start a container whose bind source
+is missing.
+
 ## How an install works, end to end
 
 1. `setup.sh` runs on the box, from DGX OS or from a running spark-os. It finds the DGX OS root (`/`

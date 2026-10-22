@@ -129,9 +129,11 @@ services.kindling.dispram = {
 
 Replace **both** declared versions and the pinned source when validating a different driver.
 The daemon checks
-`/proc/driver/nvidia/version` at runtime and exits without lending on a mismatch. The
-derivation in `nix/pkgs/dispram.nix` installs the client plugin under
-`share/dispram/python` for mounting into model containers. Dispram has **not** been
+`/proc/driver/nvidia/version` at runtime and exits without lending on a mismatch. With
+`services.kindling.enable`, the module links the client plugin at
+`/opt/kindling/dispram/python` and creates `/run/dispram`, the paths recipes mount (see
+[dispram/README.md](dispram/README.md#vllm)), so a recipe starts whether or not dispramd runs.
+Without dispramd the plugin stands aside. Dispram has **not** been
 validated with the NixOS driver or on a NixOS GB10 host. Do not enable it just to chase
 the Ubuntu image's 2 GiB claim.
 
