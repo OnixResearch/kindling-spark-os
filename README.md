@@ -88,8 +88,9 @@ For an existing NixOS host flake, add this fork as an input alongside the hardwa
 Place the cluster key outside the Nix store, in `/etc/spark/mentat.key` (mode 0400), and set
 `MENTAT_SECRET_FILE=/etc/spark/mentat.key` in `/etc/spark/node.env`. Use the same key on every
 cluster node. Optional `/etc/spark/agent.env` accepts `MENTAT_ROUTER_URL` and
-`ALLOWED_SOURCES`. The snapshot uses the host's Docker-compatible CLI; choose either rootful
-Podman with Docker compatibility or Docker, not competing daemons.
+`ALLOWED_SOURCES`. The snapshot and the status screen list containers with the Docker CLI: on
+Docker's socket, or on Podman's (`/run/podman/podman.sock`) when the host runs Podman and not
+Docker. Run one of the two, not both.
 
 mentatd finds its peers by broadcast, and it announces only on interfaces that have a
 broadcast address. NixOS's scripted networking adds static addresses
