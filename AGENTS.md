@@ -39,7 +39,7 @@ lends the GB10's unused 2 GiB display carveout to CUDA.
 | `agent/` | The spark host agent (status page and MCP tools on :8090) and `spark-memory.py`. Has its own README. |
 | `dispram/` | The carveout lender (AGPL server, GPL+exception client and vLLM plugin). Has its own README and licences. |
 | `docs/` | README assets. |
-| `flake.nix`, `nix/` | NixOS host-service module, pinned mentat/agent packages, opt-in dispram. It targets a separately bootable NixOS GB10 host, not the Ubuntu image's GRUB or initramfs. |
+| `flake.nix`, `nix/` | NixOS host-service module, pinned mentat/agent packages, opt-in dispram, and a two-VM test (`nix/tests/vm.nix`). It targets a separately bootable NixOS GB10 host, not the Ubuntu image's GRUB or initramfs. |
 
 ## NixOS port
 
@@ -52,6 +52,8 @@ the actual NixOS driver, matching pinned OGKM headers, and carveout have been va
 on the box. Keep mentat's source commit and SHA-256 pinned to the release in the
 Ubuntu Dockerfile. `nix flake show`, NixOS module evaluation, and builds of the
 packaged programs exercise the host side without rebooting a box.
+`nix build -L .#checks.x86_64-linux.vm` (`nix/tests/vm.nix`) runs the module in two VMs, a
+cluster of two without GPUs. Run it after changing the module or an overlay script it uses.
 
 A NixOS unit's PATH holds only what its `path` lists, plus coreutils, findutils, grep, sed and
 systemd. The overlay scripts run unchanged, so every command they call needs its package on
@@ -59,8 +61,9 @@ their unit's `path`: `hostname` for mentatd and the status screen, `getent` for 
 screen, and `dmesg` (util-linux) for the snapshot. `nvidia-smi` is in the driver's `bin` output
 (`hardware.nvidia.package.bin`), which `/run/opengl-driver` leaves out. GNU coreutils' `uptime`
 has no `-p`, so procps comes before coreutils on the status screen's path. Evaluation does not
-catch a missing command: run each script with its unit's evaluated `environment.PATH`. When
-upstream adds a command to an overlay script, add its package to the unit.
+catch a missing command. The VM test does for mentatd, the snapshot and the status screen. For
+anything else, run the script with its unit's evaluated `environment.PATH`. When upstream adds
+a command to an overlay script, add its package to the unit.
 
 Units refer to overlay files one at a time (`${../../overlay/usr/local/bin/spark-console}`),
 never to the checkout. A copy of the checkout carries `.git`, and every edit or fetch would

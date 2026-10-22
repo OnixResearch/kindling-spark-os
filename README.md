@@ -63,6 +63,7 @@ For an existing NixOS host flake, add this fork as an input alongside the hardwa
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     dgx-spark.url = "github:graham33/nixos-dgx-spark";
     kindling.url = "path:/absolute/path/to/kindling-spark-os"; # this checkout
+    kindling.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { nixpkgs, dgx-spark, kindling, ... }: {
@@ -114,6 +115,16 @@ A trusted interface accepts every port, so never trust one that reaches past the
 group that spans boxes over the LAN needs the LAN trusted too, which is only safe on a LAN that
 holds nothing but the cluster. The agent serves host information to allowed source subnets, so
 do not expose :8090 to the public Internet.
+
+Before a box, try the module in VMs. `nix build -L .#checks.x86_64-linux.vm` (or
+`aarch64-linux` on an Arm host) boots two NixOS VMs joined by a LAN and a fabric, with the
+firewall above. It checks that the daemons name themselves and mesh, that a router on one VM
+runs the other's agent tools, that the fabric passes what the LAN blocks, and that the MTU
+unit, the snapshot, the status screen, the dispram mounts under Podman and the watchdog work.
+The VMs have no GPU, no GB10 kernel and no RDMA, so `nvidia-smi`, dispramd and the ConnectX
+MTU path still need a box.
+`nix run .#checks.x86_64-linux.vm.driverInteractive` starts the same VMs from a Python prompt:
+`start_all()` boots them, and `spark1.shell_interact()` gives a root shell.
 
 Check the generation before scheduling a reboot with
 `sudo nixos-rebuild build --flake .#spark`. On a NixOS host, use
