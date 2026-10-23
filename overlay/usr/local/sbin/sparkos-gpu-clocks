@@ -1,0 +1,33 @@
+#!/bin/sh
+# Limit GPU 0's graphics/SM clock without changing CPU or memory clocks.
+# Usage: sparkos-gpu-clocks [--dry-run] [MAX_MHZ|reset]
+# With no argument, read /etc/kindling/gpu-max-clock. No file leaves clocks alone.
+# reset restores the driver's defaults, not a lock set by another tool.
+set -eu
+
+die() { echo "sparkos-gpu-clocks: $*" >&2; exit 2; }
+dry=0
+if [ "${1:-}" = --dry-run ]; then dry=1; shift; fi
+[ "$#" -le 1 ] || die "usage: sparkos-gpu-clocks [--dry-run] [MAX_MHZ|reset]"
+if [ "$#" -eq 1 ]; then
+	clock=$1
+elif [ -f /etc/kindling/gpu-max-clock ]; then
+	clock=$(cat /etc/kindling/gpu-max-clock)
+else
+	exit 0
+fi
+
+case $clock in
+	reset) set -- --id=0 --reset-gpu-clocks ;;
+	''|*[!0-9]*) die "MAX_MHZ must be a positive integer, or reset" ;;
+	*)
+		[ "$clock" -gt 0 ] 2>/dev/null || die "MAX_MHZ must be a positive integer, or reset"
+		# A zero minimum lets the GPU idle instead of pinning it at the ceiling.
+		set -- --id=0 "--lock-gpu-clocks=0,$clock"
+		;;
+esac
+if [ "$dry" = 1 ]; then
+	printf 'nvidia-smi --error-on-warning %s %s\n' "$1" "$2"
+else
+	exec nvidia-smi --error-on-warning "$@"
+fi

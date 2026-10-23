@@ -8,6 +8,7 @@ let
   mtuScript = "${pkgs.bash}/bin/sh ${../../overlay/usr/local/sbin/sparkos-mtu}";
   mtuEnabled = cfg.connectxMtu != 0 || cfg.ethernetMtu != 0;
   checkScript = "${pkgs.bash}/bin/bash ${../../overlay/usr/local/sbin/sparkos-mentatd-check}";
+  gpuClockScript = "${pkgs.bash}/bin/sh ${../../overlay/usr/local/sbin/sparkos-gpu-clocks}";
   memory = "${packages.sparkMemory}/bin/spark-memory";
   routeReady = pkgs.writeShellScript "kindling-mentat-route" ''
     [ -n "''${MENTAT_NODE_IP:-}" ] || ${pkgs.iproute2}/bin/ip -4 route get 8.8.8.8 >/dev/null
@@ -53,6 +54,17 @@ in
     };
     console.enable = lib.mkEnableOption "the Kindling status screen on tty1 instead of a getty";
     watchdog.enable = lib.mkEnableOption "the Kindling hardware watchdog (can reset the machine)";
+    gpuMaxClockMHz = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      default = null;
+      example = 1500;
+      description = ''
+        GPU 0 graphics/SM clock ceiling in MHz, applied with nvidia-smi at boot.
+        Null leaves clocks alone. The GPU can clock down below the ceiling.
+        Stopping or removing the service resets GPU clocks to driver defaults.
+        CPU and memory clocks are unchanged. Requires the NVIDIA driver.
+      '';
+    };
     connectxMtu = lib.mkOption {
       type = lib.types.int;
       default = 0;
@@ -75,6 +87,10 @@ in
         assertion = cfg.ethernetMtu == 0 || (cfg.ethernetMtu >= 576 && cfg.ethernetMtu <= 9978);
         message = "services.kindling.ethernetMtu must be 0 or between 576 and 9978.";
       }
+      {
+        assertion = cfg.gpuMaxClockMHz == null || config.hardware.nvidia.enabled;
+        message = "services.kindling.gpuMaxClockMHz requires the NVIDIA driver to be enabled.";
+      }
     ];
 
     # On 64K-page kernels, THP raises vm.min_free_kbytes to roughly 5% of RAM.
@@ -91,6 +107,8 @@ in
       "kindling/connectx-mtu".text = "${toString cfg.connectxMtu}\n";
     } // lib.optionalAttrs (cfg.ethernetMtu != 0) {
       "kindling/ethernet-mtu".text = "${toString cfg.ethernetMtu}\n";
+    } // lib.optionalAttrs (cfg.gpuMaxClockMHz != null) {
+      "kindling/gpu-max-clock".text = "${toString cfg.gpuMaxClockMHz}\n";
     };
 
     # The agent reads it from boot, and the snapshot first writes to it 30 seconds in.
@@ -105,6 +123,20 @@ in
 
     networking.firewall.allowedTCPPorts = lib.optionals cfg.openFirewall [ 6379 6380 8090 ];
     networking.firewall.allowedUDPPorts = lib.optionals cfg.openFirewall [ 6382 ];
+
+    systemd.services.sparkos-gpu-clocks = lib.mkIf (cfg.gpuMaxClockMHz != null) {
+      description = "Kindling GPU clock ceiling";
+      wantedBy = [ "multi-user.target" ];
+      wants = lib.optional config.hardware.nvidia.nvidiaPersistenced "nvidia-persistenced.service";
+      after = [ "nvidia-persistenced.service" ];
+      path = [ pkgs.coreutils ] ++ nvidiaBin;
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = gpuClockScript;
+        ExecStop = "${gpuClockScript} reset";
+      };
+    };
 
     systemd.services.mentatd = {
       description = "Kindling mentat node daemon";

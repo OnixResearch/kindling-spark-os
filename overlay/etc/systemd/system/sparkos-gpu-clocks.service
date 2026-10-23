@@ -1,0 +1,14 @@
+[Unit]
+Description=Kindling GPU clock ceiling
+Wants=nvidia-persistenced.service
+After=nvidia-persistenced.service
+ConditionPathExists=/etc/kindling/gpu-max-clock
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/sparkos-gpu-clocks
+ExecStop=/usr/local/sbin/sparkos-gpu-clocks reset
+
+[Install]
+WantedBy=multi-user.target

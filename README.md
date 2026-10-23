@@ -77,6 +77,7 @@ For an existing NixOS host flake, add this fork as an input alongside the hardwa
           hardware.dgx-spark.enable = true;
           services.kindling.enable = true;
           # services.kindling.connectxMtu = 4096; # only if your switches support MTU 4200
+          # services.kindling.gpuMaxClockMHz = 1500; # optional GPU clock ceiling
           # services.kindling.console.enable = true; # takes over tty1
         }
       ];
@@ -330,10 +331,48 @@ Options:
   link must accept the larger frames. `setup.sh --check` lists the ports the image will raise.
 - `--ethernet-mtu N`: an exact MTU for the other Ethernet ports, such as the RJ45 port. By default
   they keep DGX OS's setting.
+- `--gpu-max-clock MHZ`: GPU 0 graphics/SM clock ceiling, applied at boot. Default: unchanged.
+  `0` leaves clocks alone. CPU and memory clocks are not changed. See [GPU clock limits](#gpu-clock-limits).
 - `--site DIR` (below).
 
 `setup.sh` takes the same options. `list` shows the installed images and GRUB's state. `stack`
 shows this setup image's kernel and driver pair.
+
+### GPU clock limits
+
+Clock limiting is opt-in. The Ubuntu image accepts `./setup.sh --gpu-max-clock 1500` (or the
+same option on `kindling-setup build` and `install`). It writes `/etc/kindling/gpu-max-clock`
+into the image, and `sparkos-gpu-clocks.service` applies it on each boot. This does not change
+the currently running DGX OS. Omit the option, or use `0`, to build an image without a cap.
+
+On NixOS, set `services.kindling.gpuMaxClockMHz = 1500;` in the host configuration. The
+NVIDIA driver must be enabled. The default is `null`, which installs no clock-limit service.
+Removing an active cap with `null` and switching stops the service and restores driver defaults.
+This does not restart mentatd or the model containers.
+
+Both use the shared `overlay/usr/local/sbin/sparkos-gpu-clocks` helper to run
+`nvidia-smi --id=0 --lock-gpu-clocks=0,1500`. The zero minimum lets the GPU idle below the
+ceiling, rather than pinning it at that speed. The driver's supported clock steps can make the
+observed speed lower than requested. CPU and memory clocks are unchanged. The host administrator
+owns the setting. The agent's MCP tools remain read-only.
+
+For a temporary limit on a running Ubuntu image, without rebooting or restarting a model:
+
+```sh
+sudo sparkos-gpu-clocks --dry-run 1500
+sudo sparkos-gpu-clocks 1500
+nvidia-smi --query-gpu=clocks.sm,utilization.gpu,temperature.gpu,power.draw --format=csv
+sudo sparkos-gpu-clocks reset
+```
+
+Stopping `sparkos-gpu-clocks.service` also restores the driver's clock defaults. This resets
+clock settings only, not the GPU or its CUDA processes. It does not restore a lock set by another
+tool, so do not run competing clock managers. A manual limit does not change the boot setting.
+Clock changes require host root privileges (and `CAP_SYS_ADMIN` inside a GPU container).
+Driver errors fail the service rather than silently claiming a cap was applied. Check
+`systemctl status sparkos-gpu-clocks` and `journalctl -u sparkos-gpu-clocks` after applying a
+persistent limit, then observe clocks under your own workload. A cap can change model latency.
+
 
 ### Swap
 

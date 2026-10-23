@@ -4,7 +4,7 @@
 #
 #   ./setup.sh [--check] [--yes] [--stack STACK] [--flavour nvidia-64k|nvidia] [--site DIR] [--no-trial]
 #              [--packages "P ..."] [--sources FILE] [--mounts "DIR ..."] [--hostname-kindling]
-#              [--connectx-mtu N] [--ethernet-mtu N] [--secret KEY]
+#              [--connectx-mtu N] [--ethernet-mtu N] [--gpu-max-clock MHZ] [--secret KEY]
 #
 #   --check     only check the prerequisites; change nothing
 #   --yes       answer yes to both questions (physical access, and building and installing)
@@ -18,6 +18,7 @@
 #   --hostname-kindling  name the box kindling-XXXX under spark-os (XXXX from its LAN MAC)
 #   --connectx-mtu  RoCE MTU for the ConnectX ports (default 4096; 0 off): raises any port too small
 #   --ethernet-mtu  exact MTU for the onboard Ethernet ports (default: as DGX OS sets it)
+#   --gpu-max-clock  GPU graphics/SM clock ceiling in MHz (default: unchanged; 0 off)
 #   --secret    mentat's cluster key, the same on every box; required when the box has none. Make one
 #               for a new cluster with: openssl rand -hex 32
 #
@@ -39,7 +40,7 @@ cd "$(dirname "$0")"
 # The options as the log shows them, with the key hidden.
 options=$(printf '%s\n' "$@" | sed '/^--secret$/{n;s/.*/<hidden>/;}' | xargs)
 check_only=0 yes=0 stack= flavour=nvidia-64k site= trial=1 packages= sources=() mounts= hostname_kindling=0
-connectx_mtu=4096 ethernet_mtu=0 secret=
+connectx_mtu=4096 ethernet_mtu=0 gpu_max_clock=0 secret=
 while [ $# -gt 0 ]; do
 	case $1 in
 		--check) check_only=1; shift ;;
@@ -54,11 +55,16 @@ while [ $# -gt 0 ]; do
 		--hostname-kindling) hostname_kindling=1; shift ;;
 		--connectx-mtu) connectx_mtu=$2; shift 2 ;;
 		--ethernet-mtu) ethernet_mtu=$2; shift 2 ;;
+		--gpu-max-clock) gpu_max_clock=$2; shift 2 ;;
 		--secret) secret=$2; shift 2 ;;
 		-h|--help) sed -n '2,/^set -uo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; exit 0 ;;
 		*) echo "setup.sh: unknown option $1 (try --help)" >&2; exit 2 ;;
 	esac
 done
+if ! { [[ $gpu_max_clock =~ ^[0-9]+$ ]] && [ "$gpu_max_clock" -ge 0 ] 2>/dev/null; }; then
+	echo "setup.sh: --gpu-max-clock must be a positive integer in MHz, or 0 for off" >&2
+	exit 2
+fi
 
 if [ -t 1 ]; then ok=$'\e[32mok\e[0m' bad=$'\e[31mFAIL\e[0m' warn=$'\e[33mwarn\e[0m'; else ok=ok bad=FAIL warn=warn; fi
 
@@ -235,6 +241,9 @@ if [ -d "$H/var/lib/tailscale" ] && { [[ " $packages " != *" tailscale "* ]] ||
 		"add: ${ts:+--sources ${ts#$H} }--packages tailscale --mounts /var/lib/tailscale"
 fi
 [ "$hostname_kindling" = 1 ] && pass "hostname under spark-os: kindling-XXXX from the LAN MAC"
+if [ "$gpu_max_clock" -gt 0 ]; then
+	pass "GPU clock ceiling under spark-os: $gpu_max_clock MHz"
+fi
 # MTUs the image will change at boot. A port that comes up with a larger MTU than its peer or
 # switch allows drops the larger frames, so these are worth a look before the first boot.
 for dev in /sys/class/net/en*; do
@@ -335,7 +344,7 @@ args=(install --flavour "$flavour")
 for src in "${sources[@]}"; do args+=(--sources "$src"); done
 [ -n "$mounts" ] && args+=(--mounts "$mounts")
 [ "$hostname_kindling" = 1 ] && args+=(--hostname-kindling)
-args+=(--connectx-mtu "$connectx_mtu" --ethernet-mtu "$ethernet_mtu")
+args+=(--connectx-mtu "$connectx_mtu" --ethernet-mtu "$ethernet_mtu" --gpu-max-clock "$gpu_max_clock")
 install_out=$(mktemp)
 $sudo docker run --rm --privileged --network host -v "$host:/host" "$tag" "${args[@]}" | tee "$install_out"
 installed=$(sed -n 's/^installed spark-os //p' "$install_out")
